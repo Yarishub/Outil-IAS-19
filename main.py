@@ -31,7 +31,7 @@ st.set_page_config(
     layout="wide",
 )
 
-st.title("📊 Calcul des engagements sociaux selon IAS 19")
+st.title("📊CALCUL DES ENGAGEMENTS SOCIAUX SELON IAS-19 (Avantages du personnel)📊")
 st.markdown("---")
 
 st.sidebar.title("⚙️ Paramètres")
@@ -44,53 +44,117 @@ st.write(f"### Vous avez choisi : **{choix}**")
 
 # ======================= IFC =======================
 if choix == "Indemnités de Fin de Carrière (IFC)":
-    st.subheader("🧮 Saisie des variables pour l'IFC")
-    col1, col2 = st.columns(2)
-    with col1:
-        age_retraite = st.number_input("Âge de retraite", min_value=0, max_value=120, value=60)
-    with col2:
+    st.subheader("🧮 Calcul des engagements IFC")
+    
+    # --- Choix mode : BD ou individuel
+    mode = st.radio("Choisissez le mode :", ["Charger une base de données", "Calcul individuel"])
+
+    age_retraite = st.number_input("Âge de retraite", min_value=0, max_value=120, value=60)
+
+    if mode == "Charger une base de données":
         uploaded_file = st.file_uploader("📂 Chargez la base de données pour IFC", type=["csv","xlsx"])
+        
+        if uploaded_file is not None:
+            try:
+                if uploaded_file.name.endswith(".csv"):
+                    df = pd.read_csv(uploaded_file, encoding="ISO-8859-1")
+                else:
+                    df = pd.read_excel(uploaded_file)
 
-    if uploaded_file is not None:
-        try:
-            if uploaded_file.name.endswith(".csv"):
-                df = pd.read_csv(uploaded_file, encoding="ISO-8859-1")
-            else:
-                df = pd.read_excel(uploaded_file)
-
-            st.success("✅ Fichier chargé avec succès !")
-            st.dataframe(df.head())
-        except Exception as e:
-            st.error(f"❌ Erreur lors du chargement du fichier : {e}")
-
-        sous_choix = st.selectbox(
-            "📌 Choisissez le cas pour le calcul de l'IFC",
-            ("Cas en sortie de retraite", "Cas de démission", "Cas de décès")
-        )
-        st.info(f"➡️ Vous avez choisi : **{sous_choix}**")
-
-        if st.button("🚀 Calculer les engagements"):
+                st.success("✅ Fichier chargé avec succès !")
+                st.dataframe(df.head())
+            except Exception as e:
+                st.error(f"❌ Erreur lors du chargement du fichier : {e}")
+            
+            sous_choix = st.selectbox(
+                "📌 Choisissez le cas pour le calcul de l'IFC",
+                ("Cas en sortie de retraite", "Cas de démission", "Cas de décès")
+            )
+            st.info(f"➡️ Vous avez choisi : **{sous_choix}**")
+            
+            action_bd = st.radio("Que souhaitez-vous faire ?", ["Calculer tout (ou 10 premiers)", "Rechercher par matricule"])
+            
             df = df.rename(columns={
                 "Numéro Identifiant du salarié": "matricule",
                 "date de naissance": "date_naissance",
                 "date d'embauche à la société": "date_embauche",
                 "salaire annuel assiette de chaque prestation constituant l'avantage": "salaire"
             })
-
             df["date_naissance"] = pd.to_datetime(df["date_naissance"], errors="coerce").dt.date
             df["date_embauche"] = pd.to_datetime(df["date_embauche"], errors="coerce").dt.date
+            
+            if action_bd == "Calculer tout":
+                if st.button("🚀 Calculer les engagements"):
+                    resultat_pbo = []
+                    resultat_sc = []
 
-            resultats = []
-            for _, row in df.iterrows():
-                p = Personne(**row.to_dict())
-                engagement = PBO(p, sous_choix)
-                resultats.append(engagement)
+                    for _, row in df.iterrows():  # on limite à 10 pour gagner du temps
+                        p = Personne(**row.to_dict())
+                        engagement = PBO(p, sous_choix)
+                        cout_service = engagement / p.anciennete_actuelle()
+                        resultat_pbo.append(engagement)
+                        resultat_sc.append(cout_service)
+                    df.loc[:len(resultat_pbo)-1, "PBO"] = resultat_pbo
+                    df.loc[:len(resultat_sc)-1, "Cout de service"] = resultat_sc
+                    st.success("✅ Calcul terminé !")
+                    st.dataframe(df)
+                    xls = df.to_excel(index=False).encode("utf-8")
+                    st.download_button("⬇️ Télécharger les résultats en excel", xls, "resultats_ifc.xlsx", "text/xlsx")
+            
+            else:  # Recherche par matricule
+                matricule_input = st.text_input("Entrez le matricule de l'employé")
+                if st.button("🔍 Rechercher et calculer"):
+                    if matricule_input in df["matricule"].values:
+                        row = df[df["matricule"] == matricule_input].iloc[0]
+                        p = Personne(**row.to_dict())
+                        engagement = PBO(p, sous_choix)
+                        cout_service = engagement / p.anciennete_actuelle()
+                        st.info(f"📌 Engagement pour {matricule_input} : {engagement:,.2f} MAD")
 
-            df["Engagement"] = resultats
-            st.success("✅ Calcul terminé !")
-            st.dataframe(df)
-            csv = df.to_csv(index=False).encode("utf-8")
-            st.download_button("⬇️ Télécharger les résultats en CSV", csv, "resultats_ifc.csv", "text/csv")
+
+                    else:
+                        st.error("❌ Matricule non trouvé dans le fichier")
+
+    else:  # Calcul individuel
+        st.info("➡️ Saisissez les informations de l'employé")
+        matricule = st.text_input("Matricule")
+        import datetime
+        today = datetime.date.today()
+        min_date = datetime.date(today.year -  110, 1, 1)  # personne max 70 ans
+        max_date = datetime.date(today.year - 0, 12, 31) # âge minimal 25 ans
+        date_naissance = st.date_input(
+            "Date de naissance",
+            min_value=min_date,
+            max_value=max_date
+        )
+        date_embauche = st.date_input(
+            "Date d'embauche",
+            min_value=min_date,
+            max_value=max_date
+        )
+        
+
+        salaire = st.number_input("Salaire annuel", min_value=0.0, step=1000.0)
+        
+        sous_choix_indiv = st.selectbox(
+            "📌 Choisissez le cas pour le calcul de l'IFC",
+            ("Cas en sortie de retraite", "Cas de démission", "Cas de décès")
+        )
+        
+        if st.button("🚀 Calculer l'engagement individuel"):
+            data = {
+                "matricule": matricule,
+                "date_naissance": date_naissance,
+                "date_embauche": date_embauche,
+                "salaire": salaire
+            }
+            p = Personne(**data)
+            engagement = PBO(p, sous_choix_indiv)
+            st.metric(
+                label=f"Engagement pour le matricule {matricule}",
+                value=f"{engagement:,.2f} MAD"
+            )
+
 
 # ======================= CM =======================
 elif choix == "Consommations Médicales (CM)": 
@@ -98,7 +162,7 @@ elif choix == "Consommations Médicales (CM)":
 
     col1, col3 = st.columns(2)
     with col1:
-        age_retraite = st.number_input("Age de la retraite", min_value=0)
+        age_retraite = st.number_input("Age de la retraite", min_value=0, max_value= 80, value=60)
     with col3:
         TFG = st.number_input("⚖️ Taux de frais de gestion", min_value=0.0, max_value=1.0, value=0.1, step=0.01)
 
