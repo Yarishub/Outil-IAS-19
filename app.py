@@ -16,7 +16,7 @@ taux_infm = 0.02
 #CM=5000
 alge=62 #L’âge jusqu’où on suppose que le salarié travaille
 algc=65 #L’âge jusqu’où les prestations sociales sont versées/couvertes
-chrev = 0,6
+chrev = 0,39
 chft = 0.39819
 chrev = (((1+TFG)/(1-TFAQ))*(1+ TTass)) - 1 
 
@@ -217,7 +217,6 @@ class Actif(Personne):
 
     @property
     def conjoint(self):
-        # Si pas marié → pas de conjoint
         if self.categorie not in ["Marié(e)", "Marié", "marie", "MARIÉ"]:
             return None
         if self.base_conjoint_ is None:
@@ -249,7 +248,6 @@ class Retraite(Personne):
 
     @property
     def conjoint(self):
-        # Si pas marié → pas de conjoint
         if self.statut not in ["Marié(e)", "Marié", "marie", "MARIÉ"]:
             return None
         if self.base_conjoint_ is None:
