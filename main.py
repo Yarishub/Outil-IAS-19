@@ -72,7 +72,7 @@ if choix == "Indemnités de Fin de Carrière (IFC)":
             )
             st.info(f"➡️ Vous avez choisi : **{sous_choix}**")
             
-            action_bd = st.radio("Que souhaitez-vous faire ?", ["Calculer tout (ou 10 premiers)", "Rechercher par matricule"])
+            action_bd = st.radio("Que souhaitez-vous faire ?", ["Calculer tout", "Rechercher par matricule"])
             
             df = df.rename(columns={
                 "Numéro Identifiant du salarié": "matricule",
@@ -98,10 +98,10 @@ if choix == "Indemnités de Fin de Carrière (IFC)":
                     df.loc[:len(resultat_sc)-1, "Cout de service"] = resultat_sc
                     st.success("✅ Calcul terminé !")
                     st.dataframe(df)
-                    xls = df.to_excel(index=False).encode("utf-8")
-                    st.download_button("⬇️ Télécharger les résultats en excel", xls, "resultats_ifc.xlsx", "text/xlsx")
+                    xls = df.to_csv(index=False).encode("utf-8")
+                    st.download_button("⬇️ Télécharger les résultats en csv", xls, "resultats_ifc.csv", "text/csv")
             
-            else:  # Recherche par matricule
+            elif action_bd == "Rechercher par matricule":
                 matricule_input = st.text_input("Entrez le matricule de l'employé")
                 if st.button("🔍 Rechercher et calculer"):
                     if matricule_input in df["matricule"].values:
@@ -109,9 +109,7 @@ if choix == "Indemnités de Fin de Carrière (IFC)":
                         p = Personne(**row.to_dict())
                         engagement = PBO(p, sous_choix)
                         cout_service = engagement / p.anciennete_actuelle()
-                        st.info(f"📌 Engagement pour {matricule_input} : {engagement:,.2f} MAD")
-
-
+                        st.info(f"📌 PBO pour {matricule_input} : {engagement:,.2f} MAD")
                     else:
                         st.error("❌ Matricule non trouvé dans le fichier")
 
